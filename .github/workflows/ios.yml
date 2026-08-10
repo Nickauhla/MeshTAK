@@ -1,0 +1,86 @@
+# -----------------------------------------------------------------------------
+# Construit un .ipa iOS NON SIGNÉ sur un runner macOS de GitHub.
+#
+# Pourquoi non signé : la signature se fait ensuite sur le PC Windows avec
+# Sideloadly, qui utilise votre identifiant Apple gratuit. Aucune clé, aucun
+# certificat et aucun secret ne transite donc par GitHub.
+#
+# Le Bluetooth ne réclame aucun droit payant chez Apple : une déclaration d'usage
+# dans Info.plist suffit, ce que fait l'étape « Déclarer l'usage du Bluetooth ».
+#
+# Lancement : onglet Actions -> « iOS (ipa non signé) » -> Run workflow.
+# -----------------------------------------------------------------------------
+name: iOS (ipa non signé)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - '.github/workflows/ios.yml'
+
+jobs:
+  build:
+    runs-on: macos-14
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Installer les dépendances
+        working-directory: app
+        run: npm ci
+
+      - name: Vérifier le protocole avant de construire
+        working-directory: app
+        run: npm test
+
+      - name: Construire le web
+        working-directory: app
+        run: npm run build
+
+      # Le dossier ios/ n'est pas versionné : il est régénéré à chaque fois, ce
+      # qui évite d'avoir besoin d'un Mac en local pour l'initialiser.
+      - name: Ajouter la plateforme iOS
+        working-directory: app
+        run: |
+          if [ ! -d ios ]; then npx cap add ios; fi
+          npx cap sync ios
+
+      - name: Déclarer l'usage du Bluetooth
+        working-directory: app/ios/App/App
+        run: |
+          plutil -replace NSBluetoothAlwaysUsageDescription \
+            -string "MeshRadio se connecte à votre boîtier radio T-Beam." Info.plist \
+          || plutil -insert NSBluetoothAlwaysUsageDescription \
+            -string "MeshRadio se connecte à votre boîtier radio T-Beam." Info.plist
+          plutil -p Info.plist | grep Bluetooth
+
+      - name: Compiler sans signature
+        working-directory: app/ios/App
+        run: |
+          xcodebuild -workspace App.xcworkspace -scheme App \
+            -configuration Release -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build
+
+      # Un .ipa n'est rien d'autre qu'un zip contenant un dossier Payload/.
+      - name: Empaqueter en .ipa
+        working-directory: app/ios/App
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/App.app Payload/
+          zip -qry MeshRadio-unsigned.ipa Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MeshRadio-ipa
+          path: app/ios/App/MeshRadio-unsigned.ipa
+          if-no-files-found: error

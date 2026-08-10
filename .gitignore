@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.pio/
+.vscode/.browse*
+app/android/
+app/ios/
+app/public/maps/*.pmtiles
+.DS_Store

@@ -1,0 +1,280 @@
+/* -----------------------------------------------------------------------------
+   Habillage tactique.
+
+   Un seul endroit définit la palette, la typographie et les primitives visuelles
+   (boutons, champs, encadrés HUD) ; les composants n'y ajoutent que ce qui leur
+   est propre. Deux règles guident l'ensemble :
+
+   - la donnée se lit en chiffres, donc en chasse fixe (distance, batterie, dBm) ;
+   - la couleur ne décore pas, elle signale (vert = nominal, ambre = attention,
+     rouge = perte, violet = demande d'aide, cyan = soi-même).
+   ----------------------------------------------------------------------------- */
+
+:root {
+  color-scheme: dark;
+
+  /* Fonds — noir légèrement olive, comme un écran d'équipement sous filtre. */
+  --bg: #080b08;
+  --surface: #101510;
+  --surface-2: #171e16;
+  --surface-3: #1f281d;
+  --line: #2a3427;
+  --line-soft: #1b231a;
+
+  /* Texte */
+  --fg: #dee5d6;
+  --muted: #8a9682;
+  --dim: #5d6858;
+
+  /* Accents */
+  --accent: #9bd93c; /* phosphore : action, sélection, onglet actif */
+  --accent-ink: #0b1004; /* texte posé sur --accent */
+  --accent-soft: rgba(155, 217, 60, 0.13);
+  --self: #4fc3e8; /* soi-même, référence */
+  --ok: #4fb85c;
+  --warn: #e0a12a;
+  --danger: #e0483a;
+  --help: #a97cf0;
+
+  /* Typographie — condensée pour l'interface, chasse fixe pour les mesures. */
+  --font-ui: 'Roboto Condensed', 'Avenir Next Condensed', 'Segoe UI', system-ui, -apple-system,
+    sans-serif;
+  --font-mono: 'Roboto Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+
+  --radius: 3px;
+  --chamfer: 9px;
+
+  font-family: var(--font-ui);
+  -webkit-tap-highlight-color: transparent;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overscroll-behavior: none;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 15px;
+}
+
+/* Trame de fond : une graticule très faible, présente sans jamais concurrencer
+   la donnée. Elle donne la texture « écran de terrain » sur toutes les vues. */
+#app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background-image:
+    linear-gradient(rgba(155, 217, 60, 0.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(155, 217, 60, 0.028) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* --- Typographie utilitaire ------------------------------------------------ */
+
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* Intitulé de section : petites capitales espacées, barrées d'un filet. */
+.hud-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--muted);
+  margin: 0 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.hud-title::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, var(--line), transparent);
+}
+
+/* --- Surfaces -------------------------------------------------------------- */
+
+/* Bloc d'information : coin supérieur gauche marqué, comme un cadre de visée. */
+.hud-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--line);
+  border-radius: var(--radius);
+}
+
+/* --- Contrôles ------------------------------------------------------------- */
+
+button {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--fg);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  transition:
+    border-color 0.12s,
+    color 0.12s,
+    background 0.12s;
+}
+
+button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+button:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+
+/* Angle coupé en bas à droite : la signature « équipement » de l'interface,
+   réservée aux actions principales pour qu'elle garde sa valeur. */
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 700;
+  clip-path: polygon(
+    0 0,
+    100% 0,
+    100% calc(100% - var(--chamfer)),
+    calc(100% - var(--chamfer)) 100%,
+    0 100%
+  );
+}
+.btn-primary:disabled {
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--dim);
+  opacity: 1;
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: var(--line);
+  color: var(--muted);
+}
+
+.btn-danger {
+  background: transparent;
+  border-color: rgba(224, 72, 58, 0.5);
+  color: var(--danger);
+}
+
+.btn-selected {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+input,
+select,
+textarea {
+  font-family: var(--font-ui);
+  font-size: 15px;
+  background: #0a0e0a;
+  color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px 11px;
+  width: 100%;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-soft);
+}
+
+input::placeholder {
+  color: var(--dim);
+}
+
+input[type='range'] {
+  padding: 0;
+  border: none;
+  background: none;
+  accent-color: var(--accent);
+  box-shadow: none;
+}
+
+/* Barres de défilement discrètes : la donnée prime sur la mécanique. */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 2px;
+}
+
+/* --- MapLibre : contrôles alignés sur le reste ------------------------------ */
+
+.maplibregl-ctrl-attrib,
+.maplibregl-ctrl-group {
+  background: rgba(8, 11, 8, 0.85) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius) !important;
+  box-shadow: none !important;
+}
+.maplibregl-ctrl-group button + button {
+  border-top-color: var(--line) !important;
+}
+.maplibregl-ctrl-group button .maplibregl-ctrl-icon {
+  filter: invert(1) hue-rotate(60deg) saturate(0.4) brightness(0.92);
+}
+.maplibregl-ctrl-attrib {
+  font-family: var(--font-mono);
+  font-size: 10px !important;
+}
+.maplibregl-ctrl-attrib a {
+  color: var(--dim) !important;
+}
+.maplibregl-ctrl-scale {
+  background: rgba(8, 11, 8, 0.8) !important;
+  border-color: var(--line) !important;
+  border-top: none !important;
+  color: var(--muted) !important;
+  font-family: var(--font-mono) !important;
+  font-size: 10px !important;
+  border-radius: 0 !important;
+}
+.maplibregl-popup-content {
+  background: var(--surface);
+  color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  padding: 9px 12px;
+}
+.maplibregl-popup-tip {
+  border-top-color: var(--surface) !important;
+  border-bottom-color: var(--surface) !important;
+}
+.maplibregl-popup-close-button {
+  color: var(--muted);
+}

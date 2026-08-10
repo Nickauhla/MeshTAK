@@ -1,0 +1,208 @@
+{
+  "main": {
+    "id": "9ce1e9a64c4eaf3b",
+    "type": "split",
+    "children": [
+      {
+        "id": "dacbb7c3b808247a",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "d5106155bd060e5a",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "CLAUDE.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "CLAUDE"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "46ba9aa6379d6719",
+    "type": "split",
+    "children": [
+      {
+        "id": "cdf6ec17d74fb7f7",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "1af90f0751302f4d",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Explorateur de fichiers"
+            }
+          },
+          {
+            "id": "3617990dd153c466",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Rechercher"
+            }
+          },
+          {
+            "id": "b4bcddd1493a60af",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Signets"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "c683508e485e67ee",
+    "type": "split",
+    "children": [
+      {
+        "id": "450248e9e20fa5dc",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "1a0b0673dc635b38",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "Bienvenue.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Rétrolien pour Bienvenue"
+            }
+          },
+          {
+            "id": "679d285b11377fc7",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "Bienvenue.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Liens sortants de Bienvenue"
+            }
+          },
+          {
+            "id": "9f8b1e827f88f6a3",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Mots-clés"
+            }
+          },
+          {
+            "id": "ef59c91cf3bed69c",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "Toutes les propriétés"
+            }
+          },
+          {
+            "id": "75a6687de18bfb30",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "Bienvenue.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Plan de Bienvenue"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Ouvrir le sélecteur rapide": false,
+      "graph:Ouvrir la vue graphique": false,
+      "canvas:Créer une nouvelle toile": false,
+      "daily-notes:Ouvrir la note quotidienne": false,
+      "templates:Insérer le modèle": false,
+      "command-palette:Ouvrir la palette de commandes": false,
+      "bases:Créer une nouvelle base": false
+    }
+  },
+  "active": "1af90f0751302f4d",
+  "lastOpenFiles": [
+    "wiki/architecture/svelte-prototype-stack.md",
+    "wiki/architecture/svelte-prototype-stack.md.tmp.144972.2cae03a87fcf",
+    "log.md.tmp.73944.18447603c073",
+    "index.md.tmp.73944.8487e8997e40",
+    "wiki/architecture/cross-platform-app-stack.md.tmp.73944.6889c12dce7f",
+    "log.md.tmp.38956.b897bdad9c9a",
+    "index.md.tmp.38956.8448a5f72762",
+    "wiki/architecture/phone-app-architecture.md.tmp.38956.690a1feac9a1",
+    "wiki/architecture/cross-platform-app-stack.md",
+    "log.md.tmp.227964.8c99f5206995",
+    "wiki/architecture/phone-app-architecture.md.tmp.227964.e288fc90c16c",
+    "log.md.tmp.18584.f49a86f9644b",
+    "wiki/00-overview.md",
+    "wiki/architecture/from-scratch-feasibility.md",
+    "wiki/concepts/duty-cycle-mitigation.md",
+    "Bienvenue.md",
+    "wiki/concepts/lora.md",
+    "wiki/concepts/gfsk-sub-ghz.md",
+    "index.md"
+  ]
+}
