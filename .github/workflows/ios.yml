@@ -77,10 +77,16 @@ jobs:
         run: |
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/App.app Payload/
-          zip -qry MeshRadio-unsigned.ipa Payload
+          zip -qry MeshTAK-unsigned.ipa Payload
+          echo "Contenu du .app :"
+          ls -la Payload/App.app
+          echo "Frameworks embarqués (leur absence ferait planter l'app au lancement) :"
+          ls -la Payload/App.app/Frameworks || echo "AUCUN dossier Frameworks"
+          echo "Taille du .ipa :"
+          ls -lh MeshTAK-unsigned.ipa
 
       - uses: actions/upload-artifact@v4
         with:
-          name: MeshRadio-ipa
-          path: app/ios/App/MeshRadio-unsigned.ipa
+          name: MeshTAK-ipa
+          path: app/ios/App/MeshTAK-unsigned.ipa
           if-no-files-found: error
