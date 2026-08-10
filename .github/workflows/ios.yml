@@ -78,12 +78,27 @@ jobs:
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/App.app Payload/
           zip -qry MeshTAK-unsigned.ipa Payload
-          echo "Contenu du .app :"
-          ls -la Payload/App.app
-          echo "Frameworks embarqués (leur absence ferait planter l'app au lancement) :"
-          ls -la Payload/App.app/Frameworks || echo "AUCUN dossier Frameworks"
-          echo "Taille du .ipa :"
-          ls -lh MeshTAK-unsigned.ipa
+
+      # Le journal d'un run n'est lisible qu'authentifié, alors que sa conclusion
+      # est publique : on encode donc les vérifications en code de sortie plutôt
+      # qu'en texte. Un bundle amputé fait échouer le job, au lieu de produire un
+      # .ipa d'apparence saine qui planterait à l'ouverture sur l'iPhone.
+      - name: Vérifier que le bundle est complet
+        working-directory: app/ios/App
+        run: |
+          APP=Payload/App.app
+          ls -la "$APP"
+          file "$APP/App"
+          ls -la "$APP/Frameworks" || echo "pas de dossier Frameworks (normal si les pods sont liés statiquement)"
+
+          test -f "$APP/App" || { echo "::error::exécutable absent du bundle"; exit 1; }
+          test -f "$APP/public/index.html" || { echo "::error::assets web absents du bundle"; exit 1; }
+          test -f "$APP/public/assets/index"*.js || { echo "::error::bundle JavaScript absent"; exit 1; }
+          /usr/libexec/PlistBuddy -c "Print :NSBluetoothAlwaysUsageDescription" "$APP/Info.plist" \
+            || { echo "::error::déclaration Bluetooth absente : l'app serait incapable de scanner"; exit 1; }
+
+          echo "Taille de l'exécutable : $(du -h "$APP/App" | cut -f1)"
+          echo "Taille du .ipa        : $(du -h MeshTAK-unsigned.ipa | cut -f1)"
 
       - uses: actions/upload-artifact@v4
         with:
