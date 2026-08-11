@@ -34,6 +34,16 @@ describe('estimateAccuracy', () => {
     expect(estimateAccuracy(4, 0).meters).toBe(50);
     expect(estimateAccuracy(4, 0).quality).toBe('poor');
   });
+
+  it('ne réclame un cercle que lorsque l’incertitude dit quelque chose', () => {
+    // Beaucoup de satellites, bonne géométrie : le rayon tient dans le marqueur.
+    expect(estimateAccuracy(12, 0.6).showCircle).toBe(false);
+    expect(estimateAccuracy(8, 1.0).showCircle).toBe(false);
+    // Dès que ça se dégrade, le cercle apparaît et grandit avec le doute.
+    expect(estimateAccuracy(8, 3.0).showCircle).toBe(true);
+    expect(estimateAccuracy(3, 2.0).showCircle).toBe(true);
+    expect(estimateAccuracy(8, 8.0).meters).toBeGreaterThan(estimateAccuracy(8, 3.0).meters);
+  });
 });
 
 describe('circleRing', () => {

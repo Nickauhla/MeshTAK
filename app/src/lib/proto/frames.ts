@@ -29,6 +29,7 @@ export const FrameType = {
   ACK: 4,
   JOIN_REQUEST: 5,
   JOIN_GRANT: 6,
+  MARKER: 7,
   CFG_GET: 8,
   CFG_STATE: 9,
   CFG_SET: 10,
@@ -48,6 +49,20 @@ export const Flags = {
 } as const;
 
 export const PlayerStatus = { OK: 0, HIT: 1, ELIMINATED: 2, NEED_HELP: 3 } as const;
+
+/** Nature d'un point tactique — nomenclature ATAK (cf. PROTOCOL.md §4.7). */
+export const MarkerKind = {
+  /** Suppression du point : coordonnées et libellé ignorés. */
+  CLEAR: 0,
+  HOSTILE: 1,
+  HOSTILE_VEHICLE: 2,
+  FRIEND: 3,
+  UNKNOWN: 4,
+  OBJECTIVE: 5,
+  VIP: 6,
+  HAZARD: 7,
+  RALLY: 8,
+} as const;
 export const Role = { PLAYER: 0, LEADER: 1, RELAY: 2, COMMAND: 3 } as const;
 
 /** État d'appartenance à une escouade. */
@@ -258,6 +273,54 @@ export function encodeNodeInfo(n: NodeInfo): Uint8Array {
 export function decodeNodeInfo(b: Uint8Array): NodeInfo | null {
   if (b.length < 1) return null;
   return { role: b[0], callsign: cstr(b.slice(1)) };
+}
+
+// --- MARKER (13 octets + libellé) --------------------------------------------
+// L'identité d'un point est `(owner, id)` et non `src` : c'est ce qui permet à
+// n'importe quel membre de corriger ou de supprimer le point d'un autre.
+export interface Marker {
+  /** Adresse du créateur, 1..31 — pas forcément l'émetteur de la trame. */
+  owner: number;
+  /** Identifiant attribué par le créateur, 1..255. */
+  id: number;
+  kind: number;
+  lat: number; // degrés × 1e7
+  lon: number;
+  /** Durée de validité en minutes, comptée à la réception. 0 = permanent. */
+  ttlMin: number;
+  label: string;
+}
+export const MARKER_HEAD_LEN = 13;
+export const MARKER_LABEL_MAX = 20;
+
+export function encodeMarker(m: Partial<Marker> & { owner: number; id: number; kind: number }) {
+  const label = new TextEncoder().encode(m.label ?? '').slice(0, MARKER_LABEL_MAX);
+  const out = new Uint8Array(MARKER_HEAD_LEN + label.length);
+  const dv = new DataView(out.buffer);
+  out[0] = m.owner & 0xff;
+  out[1] = m.id & 0xff;
+  out[2] = m.kind & 0xff;
+  dv.setInt32(3, m.lat ?? 0, true);
+  dv.setInt32(7, m.lon ?? 0, true);
+  out[11] = Math.min(255, Math.max(0, m.ttlMin ?? 0));
+  out[12] = label.length;
+  out.set(label, MARKER_HEAD_LEN);
+  return out;
+}
+
+export function decodeMarker(b: Uint8Array): Marker | null {
+  if (b.length < MARKER_HEAD_LEN) return null;
+  const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
+  const len = Math.min(b[12], b.length - MARKER_HEAD_LEN);
+  return {
+    owner: b[0],
+    id: b[1],
+    kind: b[2],
+    lat: dv.getInt32(3, true),
+    lon: dv.getInt32(7, true),
+    ttlMin: b[11],
+    label: new TextDecoder().decode(b.slice(MARKER_HEAD_LEN, MARKER_HEAD_LEN + len)),
+  };
 }
 
 // --- ACK (3 octets) ----------------------------------------------------------

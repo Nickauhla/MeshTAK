@@ -2,7 +2,7 @@
 type: decision
 tags: [decision, adr, log]
 created: 2026-06-01
-updated: 2026-08-03
+updated: 2026-08-11
 status: stable
 ---
 
@@ -95,11 +95,43 @@ un admin**.
 la carte (seul endroit possible, mbedtls n'existant pas sur PC).
 **Réf** : [[meshradio-protocol]], [[meshradio-implementation]].
 
+## ✅ D12 — Points tactiques : l'identité est dans la charge utile, pas dans l'en-tête — *2026-08-11*
+**Contexte** : appui long sur la carte → menu circulaire ATAK (ennemi, véhicule, ami, incertain,
+objectif, VIP, danger, rassemblement), point partagé à toute l'escouade. Nouveau type de trame
+`MARKER` (code `7`, chiffré, relayé comme le reste).
+
+**Décision 1 — le créateur (`owner`) voyage dans la charge utile**, alors que `src` de l'en-tête le
+donnerait gratuitement. Un octet de plus par point, en échange de la possibilité pour **n'importe
+quel membre** de corriger ou de retirer le point d'un autre : il réémet `(owner, id)` sous sa propre
+adresse. Sans ce champ, seul le poseur pourrait effacer son point — inutilisable quand il est
+éliminé, hors de portée ou déconnecté.
+
+**Décision 2 — chaque point est émis deux fois**, à six secondes d'intervalle. Une position perdue
+est remplacée dix secondes plus tard ; un point tactique perdu ne revient jamais. Coût : ~43 ms
+d'antenne, sur une donnée rare. Les deux copies portent des `seq` différentes (elles franchissent
+donc la déduplication) et se refondent à l'arrivée sur `(owner, id)`.
+
+**Décision 3 — validité en minutes, comptée à la réception locale.** Il n'y a pas d'horloge commune
+dans le réseau. Les contacts (ennemi, ami, incertain) périment en 10 min et disparaissent seuls ; les
+éléments de terrain (objectif, danger, rassemblement, VIP) sont permanents. Un contact d'il y a un
+quart d'heure affiché comme frais est un mensonge dangereux — même raisonnement que pour
+l'incertitude GNSS.
+
+**Nomenclature ATAK** plutôt qu'inventée : losange hostile, rectangle ami, quatrefeuille incertain.
+La **forme** porte l'information autant que la couleur, et une passerelle CoT reste possible (les
+quatre affiliations se transposent telles quelles ; `danger` et `rassemblement` n'ont pas de
+quick-pick ATAK dédié et partiraient en marqueur ponctuel).
+**Réf** : `shared/PROTOCOL.md` §4.7, [[meshradio-protocol]], [[meshradio-implementation]].
+
 ## 🕒 Décisions ouvertes
 - **Identité individuelle** : le sceau prouve « un membre de l'escouade », pas « ce membre-là ». Bit
   `0x20` réservé pour une signature. Coût chiffré : ~85 ms au lieu de 33 par position, soit ~25 %
   d'occupation du canal à douze joueurs ⇒ à réserver aux trames à enjeu (statut, ordre, waypoint),
-  jamais sur chaque position.
+  jamais sur chaque position. **D12 en fait un candidat concret** : un `MARKER` est rare et à fort
+  enjeu, et rien n'empêche aujourd'hui un membre d'effacer les points d'un autre.
+- **Reprise d'état d'un arrivant** : un joueur qui rejoint en cours de partie ne reçoit aucun des
+  points tactiques déjà posés — il n'y a pas de synchronisation, seulement de la diffusion. Les
+  points permanents devraient être réémis périodiquement, ou à la demande.
 - **Vol de boîtier** : la clé d'escouade est en clair en NVS (chiffrement de flash ESP32-S3 non
   activé). Qui récupère une carte extrait la clé.
 - Plan de fréquences EU 868 (sous-canaux, réutilisation spatiale) au-delà du canal unique de D8.

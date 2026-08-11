@@ -23,7 +23,10 @@ import {
   Flags,
   FrameType,
   JoinEvent,
+  MARKER_HEAD_LEN,
+  MARKER_LABEL_MAX,
   MAX_PAYLOAD,
+  MarkerKind,
   PlayerStatus,
   Role,
   SquadState,
@@ -34,6 +37,7 @@ import {
   decodeHdop,
   decodeJoinCmd,
   decodeJoinEvent,
+  decodeMarker,
   decodeNodeInfo,
   decodePosition,
   decodeStatus,
@@ -44,6 +48,7 @@ import {
   encodeHdop,
   encodeJoinCmd,
   encodeJoinEvent,
+  encodeMarker,
   encodeNodeInfo,
   encodePosition,
   encodeStatus,
@@ -376,6 +381,46 @@ describe('charges utiles', () => {
     expect(back.lastSnr).toBe(12);
     expect(back.battMv).toBe(4150);
     expect(back.hdop).toBe(0.8); // palier
+  });
+
+  it('conserve un point tactique, libellé accentué compris', () => {
+    const m = {
+      owner: 3,
+      id: 17,
+      kind: MarkerKind.HOSTILE,
+      lat: 488570000,
+      lon: 23530000,
+      ttlMin: 10,
+      label: 'Contact à 2h',
+    };
+    expect(decodeMarker(encodeMarker(m))).toEqual(m);
+  });
+
+  it('tronque un libellé de point trop long sans casser le décodage', () => {
+    const back = decodeMarker(encodeMarker({ owner: 1, id: 1, kind: 5, label: 'x'.repeat(40) }))!;
+    expect(back.label).toHaveLength(MARKER_LABEL_MAX);
+  });
+
+  it('code une suppression de point sans libellé ni coordonnées', () => {
+    const wire = encodeMarker({ owner: 3, id: 17, kind: MarkerKind.CLEAR });
+    expect(wire).toHaveLength(MARKER_HEAD_LEN);
+    const back = decodeMarker(wire)!;
+    expect(back.kind).toBe(MarkerKind.CLEAR);
+    expect(back.owner).toBe(3);
+    expect(back.id).toBe(17);
+  });
+
+  it('porte le créateur dans la charge utile, indépendamment de l’émetteur', () => {
+    // Le vecteur partagé retire le point de #3 depuis l'adresse #7.
+    const v = vectors.frames.find((f) => f.name === 'marqueur_suppression')!;
+    const m = decodeMarker(fromHex(v.plainHex))!;
+    expect(v.src).toBe(7);
+    expect(m.owner).toBe(3);
+    expect(m.kind).toBe(MarkerKind.CLEAR);
+  });
+
+  it('rejette un point tronqué', () => {
+    expect(decodeMarker(new Uint8Array(MARKER_HEAD_LEN - 1))).toBeNull();
   });
 
   it('décode NODEINFO et ACK', () => {

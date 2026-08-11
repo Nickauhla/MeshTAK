@@ -2,7 +2,7 @@
 type: architecture
 tags: [architecture, implémentation, firmware, app, meshradio]
 created: 2026-08-03
-updated: 2026-08-03
+updated: 2026-08-11
 status: draft
 ---
 
@@ -63,10 +63,10 @@ Conforme à [[svelte-prototype-stack]] : Vite + Svelte 5 (runes) + TypeScript, C
 iOS/Android, `@capacitor-community/bluetooth-le` (natif CoreBluetooth sur iPhone, Web Bluetooth en
 fallback pour itérer dans Chrome desktop), **MapLibre GL JS** + **PMTiles** pour la carte hors-ligne.
 
-Quatre écrans : **Carte** (coéquipiers colorés par statut, suivi, cadrage escouade), **Escouade**
-(distance, batterie, fraîcheur, direct/relayé, déclaration de statut), **Messages** (diffusion ou
-privé avec accusé de réception), **Réglages** (escouade 1-16, indicatif, fond de carte, paramètres
-radio, diagnostic device).
+Quatre écrans : **Carte** (coéquipiers colorés par statut, points tactiques, suivi, cadrage
+escouade), **Escouade** (distance, batterie, fraîcheur, direct/relayé, déclaration de statut, liste
+des points tactiques, **quitter l'escouade**), **Messages** (diffusion ou privé avec accusé de
+réception), **Réglages** (indicatif, fond de carte, paramètres radio, diagnostic device).
 
 **Écart assumé vs [[svelte-prototype-stack]]** : la source GPS est directement le **GNSS du T-Beam**
 (remonté par la trame `STATUS`), pas `@capacitor/geolocation`. Une dépendance en moins, et la
@@ -85,6 +85,31 @@ GeoJSON, correct à tout zoom), estompe les marqueurs douteux et signale les poi
 ⚠️ Le rayon est **estimé** (`HDOP × 5 m`, ×3 si 2D), pas mesuré : le récepteur ne transmet aucune
 erreur réelle. Ordre de grandeur, pas garantie.
 
+*Ajusté le 11/08/2026* : le cercle **n'est plus dessiné sur un bon fix**. Il y était toujours, donc
+il ne signalait rien ; sur beaucoup de satellites, son rayon tient de toute façon dans le marqueur.
+Il n'apparaît qu'à partir de « moyen » et grandit ensuite avec le doute — c'est son **apparition**
+qui porte l'information, pas sa présence.
+
+### Points tactiques partagés (D12)
+Appui long sur la carte (420 ms, tolérance de 12 px, clic droit au bureau) → **menu circulaire**
+déployé autour du doigt : ennemi, véhicule ennemi, ami, incertain, objectif, VIP, danger,
+rassemblement, selon la nomenclature [[meshradio-protocol|ATAK]]. Le point part chiffré à toute
+l'escouade et s'affiche chez tout le monde ; le toucher ouvre une fiche pour le nommer ou le retirer.
+La couronne est décalée si l'appui a lieu près d'un bord, mais un repère marque **le point
+réellement visé** — le doigt est déjà à l'endroit voulu, le menu ne doit pas le déplacer.
+
+Le menu ne prend ses ordres qu'après 200 ms : il s'ouvre alors que le doigt est **encore posé**, et
+sans ce délai le relâchement de l'appui long refermerait le menu qu'il vient d'ouvrir.
+
+### Le lien BLE se rattrape tout seul
+Sur le terrain, le téléphone est en poche et le boîtier au harnais : la liaison tombe pour un rien
+(portée, veille iOS, batterie). Depuis le 11/08/2026, l'app **rappelle le boîtier** tant que
+l'utilisateur n'a pas explicitement coupé — attente croissante 0,7 → 15 s, essai immédiat au retour
+au premier plan (iOS suspend l'app, un `setTimeout` en cours peut dater de plusieurs minutes), et
+reprise **sans sélecteur** au lancement suivant via `getDevices([id])`, qui fait retrouver le
+périphérique connu à CoreBluetooth. L'interface reste en place et affiche le numéro d'essai plutôt
+que de renvoyer à l'écran de connexion. « Déconnecter le T-Beam » est la seule commande qui l'oublie.
+
 ## Paramètres radio par défaut
 
 **869,525 MHz**, BW 250 kHz, SF7, CR 4/5, +17 dBm, budget 10 %. Le choix de fréquence place le canal
@@ -94,7 +119,7 @@ dans la sous-bande **g3** (869,4-869,65 MHz) qui autorise **10 %** de rapport cy
 
 ## État de validation
 
-- ✅ Protocole : 37 tests TypeScript verts, vecteurs partagés générés ([[meshradio-protocol]]).
+- ✅ Protocole : **91 tests TypeScript verts**, vecteurs partagés générés ([[meshradio-protocol]]).
 - ✅ App : typecheck et build de production propres.
 - ✅ **Firmware compilé et flashé sur une vraie carte** (03/08/2026, PlatformIO 6.1.19, USB natif
   ESP32-S3 en `VID_303A/PID_1001`). RAM 12 %, Flash 18,7 % — large marge.

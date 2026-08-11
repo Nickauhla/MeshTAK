@@ -14,6 +14,13 @@
 #include "protocol.h"
 #include "vectors.h"
 
+static const TestVector *findVector(const char *name) {
+    for (size_t i = 0; i < VECTOR_COUNT; i++) {
+        if (strcmp(VECTORS[i].name, name) == 0) return &VECTORS[i];
+    }
+    return nullptr;
+}
+
 static proto::Frame frameFrom(const TestVector &v) {
     proto::Frame f;
     f.type = v.type;
@@ -144,6 +151,53 @@ void test_position_roundtrip(void) {
     TEST_ASSERT_EQUAL(proto::ST_ELIMINATED, q.status);
 }
 
+// Le point tactique est la seule charge utile dont le créateur n'est PAS `src` :
+// c'est ce qui permet de retirer le point d'un autre membre.
+void test_marker_roundtrip(void) {
+    proto::Marker m;
+    m.owner = 3;
+    m.id = 17;
+    m.kind = proto::MK_HOSTILE;
+    m.lat = 488570000;
+    m.lon = 23530000;
+    m.ttlMin = 10;
+    strncpy(m.label, "Contact 2h", sizeof(m.label) - 1);
+
+    uint8_t buf[proto::MARKER_HEAD_LEN + proto::MARKER_LABEL_MAX];
+    const size_t n = proto::encodeMarker(m, buf);
+    TEST_ASSERT_EQUAL(proto::MARKER_HEAD_LEN + 10, n);
+
+    // Mêmes valeurs que le vecteur produit par le TypeScript : c'est la
+    // comparaison qui compte, un aller-retour C++ pur ne prouverait rien.
+    const TestVector *ref = findVector("marqueur_ennemi_chiffre");
+    TEST_ASSERT_NOT_NULL(ref);
+    TEST_ASSERT_EQUAL(ref->plainLen, n);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(ref->plain, buf, n);
+
+    proto::Marker q;
+    TEST_ASSERT_TRUE(proto::decodeMarker(buf, n, q));
+    TEST_ASSERT_EQUAL(3, q.owner);
+    TEST_ASSERT_EQUAL(17, q.id);
+    TEST_ASSERT_EQUAL(proto::MK_HOSTILE, q.kind);
+    TEST_ASSERT_EQUAL_INT32(488570000, q.lat);
+    TEST_ASSERT_EQUAL_INT32(23530000, q.lon);
+    TEST_ASSERT_EQUAL(10, q.ttlMin);
+    TEST_ASSERT_EQUAL_STRING("Contact 2h", q.label);
+
+    // Suppression : en-tête seul, pas de libellé.
+    proto::Marker del;
+    del.owner = 3;
+    del.id = 17;
+    del.kind = proto::MK_CLEAR;
+    TEST_ASSERT_EQUAL(proto::MARKER_HEAD_LEN, proto::encodeMarker(del, buf));
+    TEST_ASSERT_FALSE(proto::decodeMarker(buf, proto::MARKER_HEAD_LEN - 1, q));
+
+    // Longueur de libellé mensongère : le décodage se borne aux octets reçus.
+    buf[12] = 200;
+    TEST_ASSERT_TRUE(proto::decodeMarker(buf, proto::MARKER_HEAD_LEN, q));
+    TEST_ASSERT_EQUAL_STRING("", q.label);
+}
+
 void test_config_roundtrip(void) {
     proto::Config c;
     c.squad = 115;
@@ -175,6 +229,7 @@ int main(int, char **) {
     RUN_TEST(test_decode_rejects_malformed);
     RUN_TEST(test_quality_packing);
     RUN_TEST(test_position_roundtrip);
+    RUN_TEST(test_marker_roundtrip);
     RUN_TEST(test_config_roundtrip);
     return UNITY_END();
 }

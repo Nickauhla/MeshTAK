@@ -231,6 +231,38 @@ input[type='range'] {
   border-radius: 2px;
 }
 
+/* --- Points tactiques ------------------------------------------------------
+   Les icônes sont injectées en HTML brut (menu circulaire ET marqueurs MapLibre,
+   qui sont des éléments DOM construits à la main) : leur habillage vit donc ici
+   plutôt que dans un composant, pour rester le même des deux côtés.
+
+   La FORME du cadre porte l'information autant que la couleur — losange hostile,
+   rectangle ami, quatrefeuille incertain, selon la nomenclature ATAK. Un joueur
+   qui distingue mal le rouge du vert lit quand même la carte. */
+
+.mk-glyph {
+  display: block;
+  overflow: visible;
+}
+.mk-glyph .frame {
+  fill: var(--c);
+  fill-opacity: 0.2;
+  stroke: var(--c);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+.mk-glyph .ink {
+  fill: none;
+  stroke: var(--c);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.mk-glyph .ink.fill,
+.mk-glyph .ink.flag {
+  fill: var(--c);
+}
+
 /* --- MapLibre : contrôles alignés sur le reste ------------------------------ */
 
 .maplibregl-ctrl-attrib,

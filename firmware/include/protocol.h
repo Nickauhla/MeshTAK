@@ -32,6 +32,7 @@ static const uint8_t T_NODEINFO = 3;
 static const uint8_t T_ACK = 4;
 static const uint8_t T_JOIN_REQUEST = 5;
 static const uint8_t T_JOIN_GRANT = 6;
+static const uint8_t T_MARKER = 7;
 static const uint8_t T_CFG_GET = 8;
 static const uint8_t T_CFG_STATE = 9;
 static const uint8_t T_CFG_SET = 10;
@@ -53,6 +54,17 @@ static const uint8_t ST_OK = 0;
 static const uint8_t ST_HIT = 1;
 static const uint8_t ST_ELIMINATED = 2;
 static const uint8_t ST_NEED_HELP = 3;
+
+// Nature d'un point tactique — nomenclature ATAK (cf. shared/PROTOCOL.md §4.7).
+static const uint8_t MK_CLEAR = 0;  // suppression du point
+static const uint8_t MK_HOSTILE = 1;
+static const uint8_t MK_HOSTILE_VEHICLE = 2;
+static const uint8_t MK_FRIEND = 3;
+static const uint8_t MK_UNKNOWN = 4;
+static const uint8_t MK_OBJECTIVE = 5;
+static const uint8_t MK_VIP = 6;
+static const uint8_t MK_HAZARD = 7;
+static const uint8_t MK_RALLY = 8;
 
 static const uint8_t ROLE_PLAYER = 0;
 static const uint8_t ROLE_LEADER = 1;
@@ -247,6 +259,54 @@ inline bool decodePosition(const uint8_t *in, size_t n, Position &p) {
     p.hdop = decodeHdop(in[10] & 0x0F);
     p.battPct = decodeBattery(in[11] >> 4);
     p.status = in[11] & 0x0F;
+    return true;
+}
+
+// --- MARKER (13 octets + libellé) --------------------------------------------
+// L'identité d'un point est `(owner, id)` et non `src` : n'importe quel membre
+// peut corriger ou supprimer le point d'un autre.
+static const size_t MARKER_HEAD_LEN = 13;
+static const size_t MARKER_LABEL_MAX = 20;
+
+struct Marker {
+    uint8_t owner;
+    uint8_t id;
+    uint8_t kind;
+    int32_t lat;
+    int32_t lon;
+    uint8_t ttlMin;
+    char label[MARKER_LABEL_MAX + 1];
+    Marker() : owner(0), id(0), kind(MK_CLEAR), lat(0), lon(0), ttlMin(0) {
+        memset(label, 0, sizeof(label));
+    }
+};
+
+inline size_t encodeMarker(const Marker &m, uint8_t *out) {
+    const size_t labelLen = strnlen(m.label, MARKER_LABEL_MAX);
+    out[0] = m.owner;
+    out[1] = m.id;
+    out[2] = m.kind;
+    put_i32(out + 3, m.lat);
+    put_i32(out + 7, m.lon);
+    out[11] = m.ttlMin;
+    out[12] = (uint8_t)labelLen;
+    memcpy(out + MARKER_HEAD_LEN, m.label, labelLen);
+    return MARKER_HEAD_LEN + labelLen;
+}
+
+inline bool decodeMarker(const uint8_t *in, size_t n, Marker &m) {
+    if (n < MARKER_HEAD_LEN) return false;
+    m.owner = in[0];
+    m.id = in[1];
+    m.kind = in[2];
+    m.lat = get_i32(in + 3);
+    m.lon = get_i32(in + 7);
+    m.ttlMin = in[11];
+    const size_t avail = n - MARKER_HEAD_LEN;
+    size_t labelLen = in[12] < avail ? in[12] : avail;
+    if (labelLen > MARKER_LABEL_MAX) labelLen = MARKER_LABEL_MAX;
+    memset(m.label, 0, sizeof(m.label));
+    memcpy(m.label, in + MARKER_HEAD_LEN, labelLen);
     return true;
 }
 

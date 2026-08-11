@@ -33,7 +33,7 @@ Catalogue de tout le wiki. Point de départ : [[00-overview]] · Thèse : [[synt
 | [[rnode]] | Firmware « modem radio » pour l'hôte (flash, BLE/USB) |
 | [[lxmf]] | Protocole de messagerie Reticulum (base des trames tactiques) |
 | [[sideband]] | App client (carte, position) — prototype zéro-code |
-| [[meshradio-protocol]] | ⭐ Protocole binaire maison v1 : une spec, deux codecs verrouillés par vecteurs partagés |
+| [[meshradio-protocol]] | ⭐ Protocole binaire maison **v2** : escouades chiffrées, points tactiques, deux codecs verrouillés par vecteurs partagés |
 
 ## Architecture
 | Page | Résumé |

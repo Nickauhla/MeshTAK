@@ -6,7 +6,6 @@
   let callsign = $state(session.config.callsign);
   let tiles = $state(loadTileSettings());
   let advanced = $state(false);
-  let confirmLeave = $state(false);
 
   let sf = $state(session.config.sf);
   let txPower = $state(session.config.txPower);
@@ -53,23 +52,9 @@
     </dl>
     <p class="hint">
       Les échanges de l'escouade sont chiffrés avec une clé que seul votre boîtier détient. Elle ne
-      transite jamais par le téléphone.
+      transite jamais par le téléphone. Pour la quitter, voyez les options d'escouade dans l'onglet
+      <b>Escouade</b>.
     </p>
-    {#if confirmLeave}
-      <div class="row">
-        <button class="btn-danger grow" onclick={() => session.leaveSquad()}>
-          Confirmer — quitter {session.config.squadName}
-        </button>
-        <button class="btn-ghost" onclick={() => (confirmLeave = false)}>Annuler</button>
-      </div>
-      <p class="hint warn">
-        {session.config.state === SquadState.LEADER
-          ? 'Vous en êtes le chef : plus personne ne pourra être validé, et les membres actuels resteront entre eux.'
-          : 'Il faudra une nouvelle validation du chef pour revenir.'}
-      </p>
-    {:else}
-      <button class="btn-danger" onclick={() => (confirmLeave = true)}>Quitter l'escouade</button>
-    {/if}
   </section>
 
   <section>
@@ -179,9 +164,17 @@
   {/if}
 
   <section>
-    <button class="btn-ghost full" onclick={() => session.disconnect()} disabled={!session.connected}>
+    <button
+      class="btn-ghost full"
+      onclick={() => session.disconnect()}
+      disabled={session.linkState === 'off'}
+    >
       Déconnecter le T-Beam
     </button>
+    <p class="hint">
+      Tant que vous ne coupez pas ici, l'app rappelle le boîtier toute seule quand la liaison tombe,
+      et le retrouve au lancement suivant. Cette commande, elle, l'oublie.
+    </p>
   </section>
 </div>
 
@@ -198,9 +191,6 @@
     display: flex;
     gap: 7px;
     margin-bottom: 8px;
-  }
-  .grow {
-    flex: 1;
   }
   .full {
     width: 100%;
@@ -277,10 +267,6 @@
     margin: 6px 0;
     border-left: 2px solid var(--line);
     padding-left: 10px;
-  }
-  .hint.warn {
-    color: var(--warn);
-    border-left-color: rgba(224, 161, 42, 0.5);
   }
 
   /* Relevés : deux colonnes, libellé effacé, valeur en avant. */

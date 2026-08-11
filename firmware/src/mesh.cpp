@@ -105,6 +105,7 @@ static const char *typeName(uint8_t t) {
         case proto::T_ACK: return "ACK ";
         case proto::T_JOIN_REQUEST: return "JOIN";
         case proto::T_JOIN_GRANT: return "GRNT";
+        case proto::T_MARKER: return "MARK";
         default: return "??? ";
     }
 }
@@ -328,6 +329,16 @@ static void deliverPlain(const proto::Frame &enc, const uint8_t *plain, uint8_t 
         }
     } else if (out.type == proto::T_TEXT) {
         Serial.printf("       « %.*s »\n", (int)len, (const char *)plain);
+    } else if (out.type == proto::T_MARKER) {
+        proto::Marker m;
+        if (proto::decodeMarker(plain, len, m)) {
+            if (m.kind == proto::MK_CLEAR) {
+                Serial.printf("       point #%u de #%u retiré\n", m.id, m.owner);
+            } else {
+                Serial.printf("       point #%u de #%u  type=%u  %.6f, %.6f  « %s »\n", m.id,
+                              m.owner, m.kind, m.lat / 1e7, m.lon / 1e7, m.label);
+            }
+        }
     }
     (void)rssi;
     (void)snr;
@@ -441,6 +452,20 @@ void onAppFrame(const proto::Frame &f) {
             out.dst = f.dst;
             out.len = f.len;
             memcpy(out.payload, f.payload, f.len);
+            sendNetwork(out);
+            break;
+        }
+
+        // Point tactique posé sur la carte du téléphone : le device n'en fait
+        // rien d'autre que le diffuser à l'escouade, chiffré comme le reste.
+        // `owner` reste celui qu'a écrit l'app — on peut retirer le point d'un
+        // autre, c'est la charge utile qui porte l'identité, pas l'en-tête.
+        case proto::T_MARKER: {
+            proto::Marker m;
+            if (!proto::decodeMarker(f.payload, f.len, m) || !settings::hasSquadKey) break;
+            proto::Frame out;
+            out.type = proto::T_MARKER;
+            out.len = (uint8_t)proto::encodeMarker(m, out.payload);
             sendNetwork(out);
             break;
         }

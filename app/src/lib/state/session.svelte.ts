@@ -6,24 +6,27 @@
 // jetées par le firmware faute de clé. Le nombre de nœuds entendus mais illisibles
 // remonte par le compteur `peerCount` du diagnostic.
 // -----------------------------------------------------------------------------
-import { link } from '../ble/link.ts';
+import { link, type LinkState } from '../ble/link.ts';
 import {
   DEFAULT_CONFIG,
   Flags,
   FrameType,
   JoinCmd,
   JoinEvent,
+  MarkerKind,
   PlayerStatus,
   SquadState,
   decodeAck,
   decodeConfig,
   decodeJoinEvent,
+  decodeMarker,
   decodeNodeInfo,
   decodePosition,
   decodeStatus,
   decodeText,
   encodeConfig,
   encodeJoinCmd,
+  encodeMarker,
   encodePosition,
   encodeText,
   fingerprintHex,
@@ -31,7 +34,9 @@ import {
   type Config,
   type DeviceStatus,
   type Frame,
+  type Marker,
 } from '../proto/frames.ts';
+import { markerSpec } from '../tactical/markers.ts';
 
 export interface NodeEntry {
   /** Adresse dans l'escouade, 1..31. */
@@ -67,6 +72,27 @@ export interface Candidate {
   at: number;
 }
 
+/** Point tactique partagé — identifié par `(owner, id)`, jamais par l'émetteur. */
+export interface MarkerEntry {
+  key: string;
+  owner: number;
+  id: number;
+  kind: number;
+  /** Degrés décimaux. */
+  lat: number;
+  lon: number;
+  label: string;
+  ttlMin: number;
+  /** Horodatage LOCAL de pose ou de réception : il n'y a pas d'horloge commune. */
+  at: number;
+  mine: boolean;
+}
+
+/** Seconde émission d'un point tactique — cf. PROTOCOL.md §7.8. */
+const MARKER_REPEAT_MS = 6000;
+
+const markerKey = (owner: number, id: number) => `${owner}:${id}`;
+
 function emptyNode(addr: number): NodeEntry {
   return {
     addr,
@@ -97,6 +123,10 @@ class Session {
   /** Empreinte du boîtier connecté (8 hex) — annoncée par lui à chaque connexion. */
   deviceFingerprint = $state('');
   lastError = $state('');
+  /** État du lien, reconnexion automatique comprise. */
+  linkState = $state<LinkState>('off');
+  /** Nombre d'essais depuis la dernière coupure — affiché pour ne pas mentir. */
+  reconnectAttempt = $state(0);
 
   // --- Device ----------------------------------------------------------------
   config = $state<Config>({ ...DEFAULT_CONFIG });
@@ -109,6 +139,12 @@ class Session {
   candidates = $state<Candidate[]>([]);
   /** Dernier événement d'adhésion, pour informer le candidat. */
   joinNotice = $state('');
+  /** Points tactiques de l'escouade, clés `owner:id`. */
+  markers = $state<Record<string, MarkerEntry>>({});
+
+  /** Identifiant du prochain point posé : local au device, boucle sur 1..255. */
+  private nextMarkerId = 1;
+  private pruneTimer: ReturnType<typeof setInterval> | null = null;
 
   get isLeader(): boolean {
     return this.config.state === SquadState.LEADER;
@@ -126,17 +162,30 @@ class Session {
       .sort((a, b) => a.addr - b.addr);
   }
 
+  /** Points tactiques du plus récent au plus ancien. */
+  get squadMarkers(): MarkerEntry[] {
+    return Object.values(this.markers).sort((a, b) => b.at - a.at);
+  }
+
+  /** Qui a posé ce point — l'indicatif s'il est connu, l'adresse sinon. */
+  markerAuthor(m: MarkerEntry): string {
+    if (m.mine) return this.config.callsign || 'moi';
+    return this.nodes[m.owner]?.callsign ?? `#${m.owner}`;
+  }
+
   get myPosition(): { lat: number; lon: number } | null {
     if (!this.status?.fixValid) return null;
     return { lat: toDegrees(this.status.lat), lon: toDegrees(this.status.lon) };
   }
 
   // --- Cycle de vie ----------------------------------------------------------
-  init(): void {
+  /** Renvoie vrai si un boîtier connu est en cours de reprise automatique. */
+  init(): boolean {
     link.onConnectionChange = (connected, name) => {
       this.connected = connected;
       this.deviceName = name;
       if (connected) {
+        this.lastError = '';
         void link.send({ type: FrameType.CFG_GET, flags: Flags.LOCAL });
       } else {
         this.status = null;
@@ -145,7 +194,17 @@ class Session {
         this.deviceFingerprint = '';
       }
     };
+    link.onStateChange = (state, attempt) => {
+      this.linkState = state;
+      this.reconnectAttempt = attempt;
+    };
     link.onFrame = (f) => this.handleFrame(f);
+
+    // Les points tactiques périment tout seuls : un contact ennemi de quinze
+    // minutes affiché comme frais est pire que pas de point du tout.
+    this.pruneTimer ??= setInterval(() => this.pruneMarkers(), 5000);
+
+    return link.resume();
   }
 
   async connect(): Promise<void> {
@@ -155,6 +214,12 @@ class Session {
     } catch (e) {
       this.lastError = e instanceof Error ? e.message : String(e);
     }
+  }
+
+  /** Relance immédiatement la reprise en cours, sans attendre le prochain essai. */
+  retry(): void {
+    this.lastError = '';
+    link.retryNow();
   }
 
   async disconnect(): Promise<void> {
@@ -193,9 +258,125 @@ class Session {
 
   async leaveSquad(): Promise<void> {
     await this.sendJoinCmd(JoinCmd.LEAVE);
+    this.forgetSquad();
+  }
+
+  private forgetSquad(): void {
     this.nodes = {};
     this.messages = [];
     this.candidates = [];
+    this.markers = {};
+  }
+
+  // --- Points tactiques ------------------------------------------------------
+  /**
+   * Pose un point et le diffuse. L'écho local est immédiat : sur le terrain, le
+   * doigt quitte l'écran et le point doit déjà être là, même si la radio met
+   * une seconde à partir.
+   */
+  async placeMarker(kind: number, lat: number, lon: number, label = ''): Promise<void> {
+    const id = this.nextMarkerId;
+    this.nextMarkerId = (this.nextMarkerId % 255) + 1;
+
+    const m: Marker = {
+      owner: this.config.addr,
+      id,
+      kind,
+      lat: Math.round(lat * 1e7),
+      lon: Math.round(lon * 1e7),
+      ttlMin: markerSpec(kind)?.ttlMin ?? 0,
+      label: label.slice(0, 20),
+    };
+    this.applyMarker(m);
+    await this.emitMarker(m);
+  }
+
+  /**
+   * Renomme un point. Le renvoi vaut réaffirmation : sa durée de validité repart
+   * de zéro, ce qui est le comportement voulu — on ne renomme un contact que
+   * parce qu'on vient de le revoir.
+   */
+  async renameMarker(key: string, label: string): Promise<void> {
+    const m = this.markers[key];
+    if (!m) return;
+    const next: Marker = {
+      owner: m.owner,
+      id: m.id,
+      kind: m.kind,
+      lat: Math.round(m.lat * 1e7),
+      lon: Math.round(m.lon * 1e7),
+      ttlMin: m.ttlMin,
+      label: label.slice(0, 20),
+    };
+    this.applyMarker(next);
+    await this.emitMarker(next);
+  }
+
+  /** Retire un point — le sien comme celui d'un autre membre (§4.7). */
+  async removeMarker(key: string): Promise<void> {
+    const m = this.markers[key];
+    if (!m) return;
+    const { [key]: _gone, ...rest } = this.markers;
+    this.markers = rest;
+    await this.emitMarker({ owner: m.owner, id: m.id, kind: MarkerKind.CLEAR, lat: 0, lon: 0, ttlMin: 0, label: '' });
+  }
+
+  private async emitMarker(m: Marker): Promise<void> {
+    if (!this.connected) return;
+    const payload = encodeMarker(m);
+    const frame = { type: FrameType.MARKER, payload };
+    try {
+      await link.send(frame);
+    } catch (e) {
+      // Lien coupé entre le geste et l'émission : le point reste sur MA carte,
+      // mais personne d'autre ne l'a. Il faut que ça se dise.
+      this.lastError = e instanceof Error ? e.message : String(e);
+      return;
+    }
+
+    // Seconde copie : une position perdue est remplacée dix secondes plus tard,
+    // un point tactique perdu ne revient jamais. Les deux copies se refondent à
+    // l'arrivée sur `(owner, id)`.
+    setTimeout(() => {
+      if (this.connected) void link.send(frame).catch(() => undefined);
+    }, MARKER_REPEAT_MS);
+  }
+
+  private applyMarker(m: Marker): void {
+    const key = markerKey(m.owner, m.id);
+    if (m.kind === MarkerKind.CLEAR) {
+      if (!(key in this.markers)) return;
+      const { [key]: _gone, ...rest } = this.markers;
+      this.markers = rest;
+      return;
+    }
+    if (!markerSpec(m.kind)) return; // nature inconnue : app plus ancienne que l'émetteur
+
+    this.markers = {
+      ...this.markers,
+      [key]: {
+        key,
+        owner: m.owner,
+        id: m.id,
+        kind: m.kind,
+        lat: toDegrees(m.lat),
+        lon: toDegrees(m.lon),
+        label: m.label,
+        ttlMin: m.ttlMin,
+        at: Date.now(),
+        mine: m.owner === this.config.addr,
+      },
+    };
+  }
+
+  private pruneMarkers(): void {
+    const now = Date.now();
+    const kept = Object.entries(this.markers).filter(
+      ([, m]) => m.ttlMin === 0 || now - m.at < m.ttlMin * 60000,
+    );
+    if (kept.length !== Object.keys(this.markers).length) {
+      this.markers = Object.fromEntries(kept);
+    }
   }
 
   // --- Configuration ---------------------------------------------------------
@@ -284,6 +465,16 @@ class Session {
         return;
       }
 
+      case FrameType.MARKER: {
+        const m = decodeMarker(f.payload);
+        if (!m) return;
+        // L'émetteur n'est pas forcément le créateur : on note l'un, on applique
+        // le point de l'autre.
+        this.commit(this.touchNode(f.src, relayed));
+        this.applyMarker(m);
+        return;
+      }
+
       case FrameType.TEXT: {
         const node = this.touchNode(f.src, relayed);
         this.commit(node);
@@ -319,11 +510,7 @@ class Session {
         const c = decodeConfig(f.payload);
         if (!c) return;
         // Sortie d'escouade ou changement d'escouade : la flotte connue n'a plus de sens.
-        if (c.squad !== this.config.squad) {
-          this.nodes = {};
-          this.messages = [];
-          this.candidates = [];
-        }
+        if (c.squad !== this.config.squad) this.forgetSquad();
         this.config = c;
         return;
       }

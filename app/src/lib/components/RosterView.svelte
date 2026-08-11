@@ -2,6 +2,7 @@
   import { estimateAccuracy } from '../geo/accuracy.ts';
   import { PlayerStatus } from '../proto/frames.ts';
   import { session } from '../state/session.svelte.ts';
+  import { markerSpec, markerSvg } from '../tactical/markers.ts';
 
   const STATUS = [
     { v: PlayerStatus.OK, label: 'Opérationnel', short: 'OP', color: 'var(--ok)' },
@@ -13,6 +14,7 @@
 
   let myStatus = $state<number>(PlayerStatus.OK);
   let now = $state(Date.now());
+  let confirmLeave = $state(false);
 
   $effect(() => {
     const t = setInterval(() => (now = Date.now()), 1000);
@@ -124,6 +126,38 @@
     {/if}
   </section>
 
+  {#if session.squadMarkers.length > 0}
+    <section>
+      <h2 class="hud-title">
+        Points tactiques
+        <span class="count mono">{session.squadMarkers.length}</span>
+      </h2>
+      <ul class="roster">
+        {#each session.squadMarkers as m (m.key)}
+          {@const spec = markerSpec(m.kind)}
+          <li style:--c={spec?.color}>
+            <span class="mk">{@html markerSvg(m.kind, 22)}</span>
+            <div class="who">
+              <div class="line1"><strong>{m.label || spec?.label}</strong></div>
+              <small>
+                {spec?.label}<span class="sep">·</span>{session.markerAuthor(m)}
+                <span class="sep">·</span>{age(m.at, now)}
+              </small>
+            </div>
+            <div class="metrics">
+              <span class="dist mono">{distanceM(m.lat, m.lon)}</span>
+              <small class="mono">{m.ttlMin === 0 ? 'permanent' : m.ttlMin + ' min'}</small>
+            </div>
+          </li>
+        {/each}
+      </ul>
+      <p class="hint">
+        Appui long sur la carte pour en poser un. Ils partent chiffrés à toute l'escouade et
+        s'effacent d'eux-mêmes à échéance.
+      </p>
+    </section>
+  {/if}
+
   {#if session.status && session.status.peerCount > session.squadMates.length}
     <section>
       <h2 class="hud-title">Autour de vous</h2>
@@ -134,6 +168,31 @@
       </p>
     </section>
   {/if}
+
+  <section>
+    <h2 class="hud-title">Options d'escouade</h2>
+    {#if confirmLeave}
+      <div class="leave">
+        <button class="btn-danger" onclick={() => session.leaveSquad()}>
+          Confirmer — quitter {session.config.squadName}
+        </button>
+        <button class="btn-ghost" onclick={() => (confirmLeave = false)}>Annuler</button>
+      </div>
+      <p class="hint warn">
+        {session.isLeader
+          ? 'Vous en êtes le chef : plus personne ne pourra être validé, et les membres actuels resteront entre eux avec la clé actuelle.'
+          : 'Votre boîtier oublie la clé. Il faudra une nouvelle validation du chef pour revenir.'}
+      </p>
+    {:else}
+      <button class="btn-danger full" onclick={() => (confirmLeave = true)} disabled={!session.connected}>
+        Quitter l'escouade
+      </button>
+      <p class="hint">
+        La clé de {session.config.squadName} est effacée du boîtier. Les points tactiques et les
+        messages reçus disparaissent avec elle.
+      </p>
+    {/if}
+  </section>
 </div>
 
 <style>
@@ -271,13 +330,42 @@
   .warn {
     color: var(--warn);
   }
-  .empty {
+  .empty,
+  .hint {
     color: var(--muted);
     font-size: 12.5px;
     line-height: 1.6;
     margin: 0;
     border-left: 2px solid var(--line);
     padding-left: 11px;
+  }
+  .hint {
+    font-size: 11.5px;
+    margin-top: 9px;
+  }
+  .hint.warn {
+    border-left-color: rgba(224, 161, 42, 0.5);
+  }
+
+  /* Icône du point dans la liste : même glyphe que sur la carte, en réduction. */
+  .mk {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 26px;
+  }
+
+  /* Quitter l'escouade : action nue, sans plaque pleine — elle ne doit pas se
+     confondre avec les boutons de statut, qu'on presse en jouant. */
+  .leave {
+    display: flex;
+    gap: 7px;
+  }
+  .leave .btn-danger {
+    flex: 1;
+  }
+  .full {
+    width: 100%;
   }
   b {
     color: var(--fg);

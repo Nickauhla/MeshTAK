@@ -1,12 +1,19 @@
 <script lang="ts">
   import { session } from '../state/session.svelte.ts';
 
-  let busy = $state(false);
+  let picking = $state(false);
+
+  // Reprise silencieuse d'un boîtier déjà appairé : l'app essaie toute seule,
+  // sans sélecteur. Le bouton reste là pour en choisir un autre.
+  const resuming = $derived(
+    !picking && (session.linkState === 'connecting' || session.linkState === 'retrying'),
+  );
+  const busy = $derived(picking || resuming);
 
   async function connect() {
-    busy = true;
+    picking = true;
     await session.connect();
-    busy = false;
+    picking = false;
   }
 </script>
 
@@ -27,8 +34,15 @@
     <h1>MeshRadio</h1>
     <p class="sub">Réseau tactique LoRa 868 MHz — hors réseau cellulaire</p>
 
-    <button class="btn-primary go" onclick={connect} disabled={busy}>
-      {busy ? 'Recherche…' : 'Connecter le T-Beam'}
+    {#if resuming}
+      <p class="resume">
+        <span class="pip"></span>
+        Reprise du lien avec le boîtier connu… <b class="mono">essai {session.reconnectAttempt}</b>
+      </p>
+    {/if}
+
+    <button class="btn-primary go" onclick={connect} disabled={picking}>
+      {picking ? 'Recherche…' : resuming ? 'Choisir un autre boîtier' : 'Connecter le T-Beam'}
     </button>
 
     {#if session.lastError}
@@ -133,6 +147,28 @@
     font-size: 15px;
     letter-spacing: 0.14em;
     min-width: 250px;
+  }
+  /* Reprise automatique : l'app travaille déjà, le bouton n'est qu'une porte de
+     sortie vers un autre boîtier. */
+  .resume {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    color: var(--warn);
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    margin: 0 0 4px;
+  }
+  .pip {
+    width: 6px;
+    height: 6px;
+    background: var(--warn);
+    animation: pip 1s steps(2, end) infinite;
+  }
+  @keyframes pip {
+    50% {
+      opacity: 0.15;
+    }
   }
   .err {
     color: var(--danger);

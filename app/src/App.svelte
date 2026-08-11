@@ -16,6 +16,12 @@
     if (session.connected) everConnected = true;
   });
 
+  // Le lien peut tomber en plein jeu : l'interface reste en place et dit ce
+  // qu'elle fait, plutôt que de renvoyer l'utilisateur à l'écran de connexion.
+  const retrying = $derived(
+    !session.connected && (session.linkState === 'connecting' || session.linkState === 'retrying'),
+  );
+
   // Icônes tracées : aucun fichier de police à embarquer, et le trait reste net
   // à toutes les densités d'écran.
   const TABS: { id: Tab; label: string; path: string }[] = [
@@ -41,7 +47,7 @@
 {:else}
   <header>
     <div class="left">
-      <span class="link" class:on={session.connected}>
+      <span class="link" class:on={session.connected} class:retrying>
         <span class="dot"></span>
       </span>
       <div class="ident">
@@ -54,7 +60,12 @@
       </div>
     </div>
     <div class="right">
-      {#if session.status}
+      {#if retrying}
+        <div class="gauge warn">
+          <span class="k">liaison</span>
+          <span class="v mono">essai {session.reconnectAttempt}</span>
+        </div>
+      {:else if session.status}
         <div class="gauge" class:warn={!session.status.fixValid}>
           <span class="k">gnss</span>
           <span class="v mono">
@@ -68,7 +79,7 @@
           </span>
         </div>
       {:else}
-        <button class="btn-ghost small" onclick={() => session.connect()}>Reconnecter</button>
+        <button class="btn-ghost small" onclick={() => session.connect()}>Connecter</button>
       {/if}
     </div>
   </header>
@@ -173,6 +184,16 @@
     50% {
       opacity: 0.35;
     }
+  }
+  /* Reconnexion en cours : le témoin bat vite, en ambre — ni « tout va bien »,
+     ni « c'est mort », l'app est en train de rappeler le boîtier. */
+  .link.retrying {
+    border-color: rgba(224, 161, 42, 0.5);
+  }
+  .link.retrying .dot {
+    background: var(--warn);
+    box-shadow: 0 0 7px var(--warn);
+    animation: pulse 0.7s ease-in-out infinite;
   }
 
   .ident {

@@ -72,6 +72,7 @@ l'unicité pour 65 536 redémarrages.
 | `4` | `ACK` | oui | §4.4 |
 | `5` | `JOIN_REQUEST` | **non** | §5.2 — le candidat n'a pas encore la clé |
 | `6` | `JOIN_GRANT` | **non** | §5.3 — chiffré pour le seul candidat, pas avec la clé d'escouade |
+| `7` | `MARKER` | oui | §4.7 — point tactique partagé |
 
 ### Types **locaux** — BLE uniquement, jamais émis par radio
 
@@ -175,6 +176,57 @@ arrive chiffrée par radio (validation). L'app ne la voit pas.
 | 17 | 1 | `lastRssi` — dBm **négatif, stocké en valeur absolue** |
 | 18 | 1 | `lastSnr` (i8) |
 | 19 | 1 | `peerCount` |
+
+### 4.7 `MARKER` — 13 octets + libellé
+
+Un point tactique posé sur la carte par un joueur et partagé à toute l'escouade : ennemi repéré,
+objectif, VIP, danger, point de rassemblement.
+
+| Offset | Taille | Champ | Notes |
+|---|---|---|---|
+| 0 | 1 | `owner` | adresse du créateur, `1..31` |
+| 1 | 1 | `id` | identifiant **chez le créateur**, `1..255` |
+| 2 | 1 | `kind` | nature du point — `0` = **suppression** |
+| 3 | 4 | `lat` (i32) | degrés × 1e7 |
+| 7 | 4 | `lon` (i32) | degrés × 1e7 |
+| 11 | 1 | `ttlMin` | durée de validité en minutes, `0` = permanent |
+| 12 | 1 | longueur du libellé | `0..20` |
+| 13 | 0..20 | `label` | UTF-8, libre |
+
+**Identité d'un point = `(owner, id)`**, pas `src`. Le créateur est donc porté par la charge utile et
+non déduit de l'en-tête : c'est ce qui permet à **n'importe quel membre** de corriger ou de supprimer
+le point d'un autre — il réémet `(owner, id)` sous sa propre adresse `src`. Dernière trame reçue
+gagne.
+
+`kind = 0` est une **suppression** : les coordonnées et le libellé sont alors ignorés.
+
+Le `ttlMin` se compte à partir de la **réception locale** : il n'y a pas d'horloge commune dans le
+réseau, et un point de contact ennemi n'a de valeur que quelques minutes. `0` réserve le point
+permanent aux éléments de terrain (objectif, rassemblement).
+
+Nature du point (`kind`) — nomenclature **ATAK / MIL-STD-2525** :
+
+| Code | Nom | Type CoT | Cadre |
+|---|---|---|---|
+| `0` | suppression | — | — |
+| `1` | ennemi | `a-h-G` | losange rouge (hostile) |
+| `2` | véhicule ennemi | `a-h-G-E-V` | losange rouge |
+| `3` | ami / allié | `a-f-G` | rectangle bleu (friendly) |
+| `4` | contact incertain | `a-u-G` | quatrefeuille jaune (unknown) |
+| `5` | objectif | `b-m-p-w` | point de passage |
+| `6` | VIP | `a-n-G` + libellé | rond neutre — pas de quick-pick ATAK dédié |
+| `7` | danger / piège | `b-m-p-s-m` | marqueur ponctuel — extension MeshRadio |
+| `8` | rassemblement / repli | `b-m-p-s-m` | marqueur ponctuel — extension MeshRadio |
+
+Les quatre premiers cadres (`a-h-G`, `a-f-G`, `a-u-G`, `a-n-G`) sont les affiliations standard d'ATAK
+et se transposent telles quelles vers CoT. Les codes `7` et `8` n'ont pas d'équivalent dédié dans les
+quick-picks d'ATAK : une passerelle CoT les émettrait en marqueur ponctuel, la nature restant dans le
+libellé.
+
+> Une trame de point tactique complète (libellé de 12 caractères, chiffrée) pèse **41 octets**, soit
+> ~43 ms d'antenne. L'app l'émet **deux fois** à quelques secondes d'intervalle (§7.8) : c'est une
+> donnée rare et non répétée, contrairement à une position — la perdre coûte plus cher que de la
+> doubler.
 
 ---
 
@@ -290,6 +342,11 @@ quand même** (§7.3) : ne pas savoir lire n'empêche pas de faire suivre.
 7. **Trames venues du téléphone** — l'app n'écrit jamais `src`, `seq`, `epoch` ni `ttl` : le firmware
    les renseigne. Une `POSITION` reçue **du téléphone** ne porte pas de coordonnées, elle déclare le
    **statut du joueur** ; le device réémet aussitôt sa vraie position GNSS avec ce statut.
+8. **Points tactiques** — un `MARKER` est émis **deux fois** par l'app, à quelques secondes
+   d'intervalle. Les deux copies portent des `seq` différentes et franchissent donc la
+   déduplication ; c'est le couple `(owner, id)` de la charge utile qui les fond en un seul point à
+   l'arrivée. Une position perdue est remplacée dix secondes plus tard, un point tactique perdu ne
+   revient jamais.
 
 ### Ce que le protocole ne protège pas
 
